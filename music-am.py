@@ -17,7 +17,7 @@ except ImportError:
 try:
     import mpv
 except ImportError:
-    sys.exit("python-mpv nahi mila. Install karo: pip install python-mpv")
+    sys.exit("python-mpv was not found. Install it with: pip install python-mpv")
 
 try:
     from mutagen import File as MutagenFile
@@ -563,8 +563,8 @@ HELP = [
     " o            open folder in All (Library → Folders)",
     " ← / BKSP     back (Library) / decrease setting",
     " → / J / L    seek +5 / -30 / +30 sec",
-    " SPACE        pause / play (fade ke saath)",
-    " n / p        next / prev (fade ke saath)",
+    " SPACE        pause / play (with fade effect)",
+    " n / p        next / prev (with fade effect)",
     " + / -        volume       m    mute",
     " [ / ] / 0    speed slower / faster / reset",
     " E            equalizer menu (popup)",
@@ -572,7 +572,7 @@ HELP = [
     " t / T        sleep timer cycle / custom",
     " a            play visible list / current folder",
     " s / r        shuffle · repeat",
-    " /            search         Esc = band",
+    " /            search         Esc = close",
     " i            track info     L    lyrics (.lrc)",
     " N            now-playing popup",
     " R            library rescan",
@@ -898,7 +898,7 @@ class App:
     def toggle_favorite(self, path=None):
         path = path or self.current_path
         if not path:
-            self.status = "Koi gaana select nahi"
+            self.status = "No track selected"
             return
         if path in self.favorites:
             self.favorites.discard(path)
@@ -1152,7 +1152,7 @@ class App:
                 self.set_queue(songs, 0)
                 self.status = f"Playlist: {os.path.basename(payload)}"
             else:
-                self.status = "Playlist khaali hai ya files missing hain"
+                self.status = "Playlist is empty or files are missing"
         elif kind == "set":
             self.adjust_setting(payload, +1)
 
@@ -1163,7 +1163,7 @@ class App:
             if r[0] in ("file", "qitem") and r[2] == self.current_path:
                 self.idx = i
                 return
-        self.status = "Ye gaana is list mein nahi hai"
+        self.status = "This track is not in the current list"
 
     def adjust_setting(self, key, d):
         _, _, kind, opts = next(s for s in SETTING_SPEC if s[0] == key)
@@ -1410,11 +1410,11 @@ class App:
 
     def open_lyrics(self):
         if not self.current_path:
-            self.status = "Koi gaana nahi chal raha"
+            self.status = "No track is currently playing"
             return
         data = read_lrc(self.current_path)
         if not data:
-            self.status = "Lyrics (.lrc) nahi mili"
+            self.status = "Lyrics (.lrc) not found"
             return
         self.lyrics_path = self.current_path
         self.lyrics_data = data
@@ -1422,7 +1422,7 @@ class App:
 
     def open_now_playing(self):
         if not self.current_path:
-            self.status = "Koi gaana nahi chal raha"
+            self.status = "No track is currently playing"
             return
         self.now_playing_open = True
 
@@ -1457,7 +1457,7 @@ class App:
         if self.search_on:
             cursor = "▌" if self.focus == "input" else ""
             sub = (f" / {self.query}{cursor}   {len(self.s_hits)} results   "
-                   f"↑↓ move · ⏎ play · Esc band")
+                   f"↑↓ move · ⏎ play · Esc close")
         elif self.tab == 0:
             if self.folder_filter:
                 sub = f"   {os.path.basename(self.folder_filter)}  ·  1 = poora All"
@@ -1487,13 +1487,13 @@ class App:
 
     def empty_msg(self):
         if LIB.scanning:
-            return "Scan ho raha hai, thora wait karo..."
+            return "Scanning the library. Please wait..."
         if LIB.view is None:
-            return "Library khaali hai. R dabao (scan shuru hoga)"
+            return "The library is empty. Press R to start scanning"
         if self.search_on:
             return "No results found"
         if self.tab == 0:
-            return "Library khaali hai (R dabao scan ke liye)"
+            return "The library is empty (press R to scan)"
         if self.tab == 2:
             return ""
         lv = self.lib_view
@@ -1546,7 +1546,7 @@ class App:
         top, bot = 4, h - 5
         for y in range(top, bot):
             safe(self.scr, y, 0, " " * (w - 1))
-        safe(self.scr, top, 2, "Track info   (koi bhi key = band)",
+        safe(self.scr, top, 2, "Track info   (any key = close)",
              curses.color_pair(2) | curses.A_BOLD)
         y = top + 2
         vw = max(10, w - 22)
@@ -1563,7 +1563,7 @@ class App:
         top, bot = 4, h - 5
         for y in range(top, bot):
             safe(self.scr, y, 0, " " * (w - 1))
-        safe(self.scr, top, 2, "Lyrics   (↑↓ scroll · koi bhi key = band)",
+        safe(self.scr, top, 2, "Lyrics   (↑↓ scroll · any key = close)",
              curses.color_pair(2) | curses.A_BOLD)
         pos = self.gp("time_pos", 0) or 0
         active = -1
@@ -1739,7 +1739,7 @@ class App:
         scr.erase()
         h, w = scr.getmaxyx()
         if h < 12 or w < 30:
-            safe(scr, 0, 0, "Terminal chhota hai, bada karo")
+            safe(scr, 0, 0, "Terminal is too small. Enlarge it")
             scr.refresh()
             return
         self.draw_header(w)
@@ -1862,7 +1862,7 @@ class App:
             if cur and cur[0] in ("file", "qitem"):
                 self.info_path = cur[2]
             else:
-                self.status = "Info sirf gaane ke liye hai"
+                self.status = "Track info is only available for music tracks"
         elif ch == "f":
             if cur and cur[0] in ("file", "qitem"):
                 self.toggle_favorite(cur[2])
@@ -1870,7 +1870,7 @@ class App:
                 self.toggle_favorite(self.current_path)
         elif ch == "R":
             if LIB.scanning:
-                self.status = "Scan already chal raha hai"
+                self.status = "A scan is already in progress"
             else:
                 LIB.start_scan()
                 self.status = "Scanning library..."
@@ -2006,7 +2006,7 @@ if __name__ == "__main__":
     try:
         _player = mpv.MPV(**build_mpv_opts(EXTRA_FLAGS))
     except Exception as e:
-        sys.exit(f"mpv start nahi hua: {e}\nCheck: mpv --list-options | grep <flag>")
+        sys.exit(f"Could not start mpv: {e}\nCheck: mpv --list-options | grep <flag>")
     atexit.register(_cleanup_player, _player)
     _install_signal_handlers(_player)
     try:
