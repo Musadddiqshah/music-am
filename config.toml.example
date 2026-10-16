@@ -1,0 +1,44 @@
+# music-am configuration file
+# Copy to: ~/.config/music-am/config.toml
+
+[general]
+root = "/sdcard/Music"
+extensions = [".mp3", ".m4a", ".flac", ".opus", ".wav", ".aac", ".ogg"]
+skip_dirs = [".thumbnails", "Android/data", "Android/obb", "WhatsApp/.Statuses", ".trash", "LOST.DIR"]
+max_scan_depth = 6
+
+[player]
+volume_start = 100
+volume_max = 150
+volume_step = 5
+seek_step = 5
+shuffle = false
+repeat = "off"
+eq = "flat"
+extra_flags = ["--no-video", "--idle=yes", "--no-resume-playback"]
+
+[ui]
+theme = "dracula"
+show_folders = true
+show_count = false
+show_total = false
+show_counts = true
+show_meta = true
+resume = true
+
+[keys]
+search = "/"
+play_all = "a"
+shuffle = "s"
+repeat = "r"
+prev = "p"
+next = "n"
+jump_playing = "g"
+write_playlist = "w"
+bookmarks = "b"
+help = "?"
+mute = "m"
+slower = "["
+faster = "]"
+speed_reset = "0"
+sleep = "t"
