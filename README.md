@@ -32,4 +32,4 @@ pip install python-mpv mutagen
 git clone https://https://github.com/Musadddiqshah/music-am.git
 cd music-am
 
-python music11.py
+python music-am.py
