@@ -1,4 +1,4 @@
-# music11 🎵
+# music Player v2 🎵
 
 A fast, keyboard-driven terminal music player for **Termux** (Android) and Linux, built with Python + curses + mpv.
 
