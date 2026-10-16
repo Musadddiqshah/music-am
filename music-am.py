@@ -582,7 +582,7 @@ HELP = [
     " f            toggle favorite (current track)",
     " q            quit",
     "",
-    " Koi bhi key dabao band karne ke liye",
+    " Press any key to close",
 ]
 
 
@@ -596,7 +596,7 @@ class App:
         self.cur_dir = START_DIR
         self.idx = 0
         self.scroll = 0
-        self.status = "Ready" if LIB.view else "Library scan ho rahi hai..."
+        self.status = "Ready" if LIB.view else "Scanning library..."
         self.queue = []
         self.q_idx = -1
         self.current_path = ""
@@ -902,10 +902,10 @@ class App:
             return
         if path in self.favorites:
             self.favorites.discard(path)
-            self.status = f"♡ Removed: {os.path.basename(path)[:40]}"
+            self.status = f" Removed: {os.path.basename(path)[:40]}"
         else:
             self.favorites.add(path)
-            self.status = f"♥ Added: {os.path.basename(path)[:40]}"
+            self.status = f" Added: {os.path.basename(path)[:40]}"
         self.persist()
 
     def play_folder(self, folder):
@@ -917,7 +917,7 @@ class App:
             self.set_queue(paths, 0)
             self.status = f"Folder: {os.path.basename(folder)} ({len(paths)})"
         else:
-            self.status = "Is folder mein gaane nahi hain"
+            self.status = "Nothing in this folder"
 
     # ---------- navigation ----------
     def switch_tab(self, t):
@@ -948,12 +948,12 @@ class App:
         V = LIB.view
         rows = []
         cnt = len(V["all_dirs"]) if V else 0
-        rows.append(("menu", f"▸  Folders  ({cnt})", "Folders"))
-        rows.append(("menu", f"◷  Recent  ({len(self.history)})", "Recent"))
-        rows.append(("menu", f"≡  Playlists  ({len(LIB.playlists)})", "Playlists"))
-        rows.append(("menu", f"♥  Favorite  ({len(self.favorites)})", "Favorite"))
-        rows.append(("menu", f"♪  Queue  ({len(self.queue)})", "Queue"))
-        rows.append(("menu", f"▪  Stats", "Stats"))
+        rows.append(("menu", f"  Folders  ({cnt})", "Folders"))
+        rows.append(("menu", f"  Recent  ({len(self.history)})", "Recent"))
+        rows.append(("menu", f"  Playlists  ({len(LIB.playlists)})", "Playlists"))
+        rows.append(("menu", f"  Favorite  ({len(self.favorites)})", "Favorite"))
+        rows.append(("menu", f"󰎌  Queue  ({len(self.queue)})", "Queue"))
+        rows.append(("menu", f"󱕎  Stats", "Stats"))
         return rows
 
     def build_folders(self):
@@ -974,7 +974,7 @@ class App:
             rows.append(("file", list_label(p), p))
         # Playlists in this folder
         for p in V["pls"].get(self.cur_dir, []):
-            rows.append(("pl", f"≡ {os.path.basename(p)}  ({LIB.playlists.get(p, 0)})", p))
+            rows.append(("pl", f" {os.path.basename(p)}  ({LIB.playlists.get(p, 0)})", p))
         return rows
 
     def build_playlists(self):
@@ -997,7 +997,7 @@ class App:
         rows = []
         for p in sorted(self.favorites, key=lambda x: list_label(x).lower()):
             if os.path.exists(p):
-                rows.append(("file", f"♥ {list_label(p)}", p))
+                rows.append(("file", f" {list_label(p)}", p))
         return rows
 
     def build_queue(self):
@@ -1434,7 +1434,7 @@ class App:
             right = f"⟳ scanning {LIB.found}  "
         else:
             right = f"vol {self.user_vol}  "
-        left = f" ♪ music-am  ·  {self.status}"
+        left = f"  music-am  ·  {self.status}"
         width = max(0, w - len(right) - 1)
         line = left[:width].ljust(width) + right
         safe(self.scr, 0, 0, line, curses.color_pair(1) | curses.A_BOLD)
@@ -1460,7 +1460,7 @@ class App:
                    f"↑↓ move · ⏎ play · Esc band")
         elif self.tab == 0:
             if self.folder_filter:
-                sub = f" 📁 {os.path.basename(self.folder_filter)}  ·  1 = poora All"
+                sub = f"   {os.path.basename(self.folder_filter)}  ·  1 = poora All"
             else:
                 sub = " All songs  ·  alphabetical"
         elif self.tab == 1:
@@ -1469,7 +1469,7 @@ class App:
                 sub = " Library menu  ·  ⏎ = open  ·  ← / Backspace = wapas"
             elif lv == 1:
                 rel = os.path.relpath(self.cur_dir, ROOT) if self.cur_dir != ROOT else "."
-                sub = f" 📁 {rel}  ·  ⏎ = enter  ·  ⌫ = up  ·  a = play all  ·  o = All view"
+                sub = f"   {rel}  ·  ⏎ = enter  ·  ⌫ = up  ·  a = play all  ·  o = All view"
             elif lv == 2:
                 sub = " Recently played (latest first)"
             elif lv == 3:
@@ -1481,7 +1481,7 @@ class App:
             elif lv == 6:
                 sub = " Library statistics"
         else:
-            sub = " Enter / → badlo · ← kam karo · E = EQ menu"
+            sub = " ENTER / Right = change"
         safe(self.scr, 2, 0, sub, curses.color_pair(2))
         safe(self.scr, 3, 0, "─" * (w - 1), curses.color_pair(6))
 
@@ -1491,7 +1491,7 @@ class App:
         if LIB.view is None:
             return "Library khaali hai. R dabao (scan shuru hoga)"
         if self.search_on:
-            return "Koi gaana nahi mila"
+            return "No results found"
         if self.tab == 0:
             return "Library khaali hai (R dabao scan ke liye)"
         if self.tab == 2:
@@ -1499,11 +1499,11 @@ class App:
         lv = self.lib_view
         return {
             0: "",
-            1: "Is folder mein kuch nahi hai",
-            2: "Abhi kuch play nahi kiya",
-            3: "Koi playlist (.m3u) nahi mili",
-            4: "Koi favorite nahi (f dabao gaane par)",
-            5: "Queue khaali hai",
+            1: "Nothing in this folder",
+            2: "Nothing played yet",
+            3: "No playlists (.m3u) found",
+            4: "No favorites yet (press f on a track)",
+            5: "Queue is empty",
             6: "",
         }.get(lv, "")
 
@@ -1528,7 +1528,7 @@ class App:
             kind, label, payload = rows[r]
             y = top + i
             if r == self.idx:
-                safe(self.scr, y, 0, (" ❯ " + label).ljust(w - 1),
+                safe(self.scr, y, 0, ("  " + label).ljust(w - 1),
                      curses.color_pair(3) | curses.A_BOLD)
             else:
                 playing = kind in ("file", "qitem") and payload == self.current_path
@@ -1600,7 +1600,7 @@ class App:
         safe(self.scr, 5, 2, "╭" + "─" * (w - 6) + "╮", curses.color_pair(2))
         y = 6
         for ln in textwrap.wrap(title, w - 8)[:2]:
-            safe(self.scr, y, 4, f"  ♪ {ln}", curses.color_pair(5) | curses.A_BOLD)
+            safe(self.scr, y, 4, f"   {ln}", curses.color_pair(5) | curses.A_BOLD)
             y += 1
         y += 1
         if artist:
@@ -1635,7 +1635,7 @@ class App:
         chips.append(f"EQ:{self.eq}")
         safe(self.scr, y, 4, "  ".join(chips), curses.color_pair(2))
         y += 2
-        safe(self.scr, y, 4, "Koi bhi key dabao band karne ke liye", curses.color_pair(6))
+        safe(self.scr, y, 4, "Press any key to close", curses.color_pair(6))
         safe(self.scr, min(h - 6, y + 2), 2, "╰" + "─" * (w - 6) + "╯", curses.color_pair(2))
 
     def draw_eq_menu(self, h, w):
@@ -1649,7 +1649,7 @@ class App:
         for i, k in enumerate(keys):
             if y >= h - 5:
                 break
-            marker = " ❯ " if i == self.eq_menu_idx else "   "
+            marker = "  " if i == self.eq_menu_idx else "   "
             current = " ●" if k == self.eq else ""
             attr = (curses.color_pair(3) | curses.A_BOLD) if i == self.eq_menu_idx else curses.color_pair(11)
             safe(self.scr, y, 2, f"{marker}{k}{current}", attr)
@@ -1666,7 +1666,7 @@ class App:
         for i, k in enumerate(keys):
             if y >= h - 5:
                 break
-            marker = " ❯ " if i == self.theme_menu_idx else "   "
+            marker = "  " if i == self.theme_menu_idx else "   "
             current = " ●" if k == SET["theme"] else ""
             attr = (curses.color_pair(3) | curses.A_BOLD) if i == self.theme_menu_idx else curses.color_pair(11)
             safe(self.scr, y, 2, f"{marker}{k}{current}", attr)
@@ -1676,8 +1676,8 @@ class App:
         safe(self.scr, h - 5, 0, "─" * (w - 1), curses.color_pair(6))
         if self.current_path:
             title = track_title(self.current_path)[:max(20, w - 6)]
-            fav = "♥ " if self.current_path in self.favorites else ""
-            safe(self.scr, h - 4, 0, f"  ♪ {fav}{title}",
+            fav = " " if self.current_path in self.favorites else ""
+            safe(self.scr, h - 4, 0, f"   {fav}{title}",
                  curses.color_pair(5) | curses.A_BOLD)
         else:
             safe(self.scr, h - 4, 0, "  Nothing playing, ENTER dabao", curses.color_pair(6))
@@ -1841,9 +1841,9 @@ class App:
                     paths = sorted(V["under"].get(self.cur_dir, []))
                     if paths:
                         self.set_queue(paths, 0)
-                        self.status = f"♪ Folder: {os.path.basename(self.cur_dir)} ({len(paths)})"
+                        self.status = f" Folder: {os.path.basename(self.cur_dir)} ({len(paths)})"
                     else:
-                        self.status = "Is folder mein gaane nahi hain"
+                        self.status = "Nothing in this folder"
             else:
                 files = [r[2] for r in rows if r[0] in ("file", "qitem")]
                 if files:
@@ -1884,7 +1884,7 @@ class App:
             if self.tab == 1 and self.lib_view == 5:
                 self.remove_from_queue()
             else:
-                self.status = "d sirf Queue view mein kaam karta hai"
+                self.status = "d only works in Queue view"
         elif ch == "c":
             if self.tab == 1 and self.lib_view == 5:
                 self.clear_queue()
@@ -1898,9 +1898,9 @@ class App:
                 self.folder_filter = folder
                 self.idx = 0
                 self.scroll = 0
-                self.status = f"📁 {os.path.basename(folder)}  ·  1 = poora All"
+                self.status = f"  {os.path.basename(folder)}  ·  1 = poora All"
             else:
-                self.status = "o sirf Library → Folders mein folder pe kaam karta hai"
+                self.status = "o only works on folders in Library / Folders"
         elif ch == K["help"]:
             self.help_open = True
         return True
