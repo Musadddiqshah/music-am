@@ -1,4 +1,4 @@
-# music Player v2 🎵
+# music-am 🎵
 
 A fast, keyboard-driven terminal music player for **Termux** (Android) and Linux, built with Python + curses + mpv.
 
@@ -8,28 +8,44 @@ A fast, keyboard-driven terminal music player for **Termux** (Android) and Linux
 
 ## ✨ Features
 
-- 🎨 **28 color themes** (ocean, dracula, cyberpunk, matrix, gruvbox, nord, ...)
-- 🎛️ **17 equalizer presets** (bass, vocal, rock, jazz, EDM, hiphop, ...)
-- 📚 **Library browser** — Folders, Recent, Playlists, Favorites, Queue, Stats
-- 🔍 **Instant search** across filename / title / artist / album
-- ⏸️ **Fade in/out** on play/pause, next/prev — smooth transitions
-- 🌙 **Sleep timer** (15/30/60 min or custom)
-- 💾 **Session restore** — queue and position persist across runs
-- ♥️ **Favorites** — heart your favorite tracks
-- 📝 **Lyrics** support (`.lrc` files) with synced highlight
-- 🎯 **Resume playback** — remembers last position per track
-- ⚡ **Background library scan** with JSON cache
-- 🖥️ **Clean TUI** with Nerd Font icons
+### 🎧 Audio
+- **16 equalizer presets** — 8D rotation, 3D spatial, Lo-fi, Bass, Vocal
+- **Per-track EQ memory** — each song remembers its own EQ
+- **Real crossfade** — 2 mpv instances
+- **Custom fade duration** — 0-2000 ms
+- **Sleep timer** with fade-out
+
+### 📝 Lyrics
+- **Auto-fetch from LRCLIB** — no manual `.lrc` files
+- **Multi-language** — Hindi, Urdu, Roman, English
+- **Display filter** — choose language in Settings
+- **Synced scroll** — current line highlighted
+
+### 🎨 UI
+- **28+ themes** — Dracula Pro, Tokyo Night, Catppuccin, Monokai Pro
+- **Bar visualizer** — 8 animated bars
+- **Full-screen Now Playing**
+- **Nerd Font TUI**
+
+### 📚 Library
+- **Folder navigation** — file-manager style
+- **Smart playlists** — Recently Added, Most Played, Never Played, Same Artist, Same Album
+- **Favorites, History, Queue**
+- **Search filters** — `/artist:`, `/album:`, `/fav`, `/recent`, `/eq:`
+- **Random song** (`y`)
+
+### 📊 Statistics
+- Weekly / monthly plays
+- Top 5 artists and tracks
 
 ## 📦 Installation
 
 ### Termux (Android)
 
 ```bash
-pkg install python mpv
+pkg install python mpv termux-api
 pip install python-mpv mutagen
 
-git clone https://https://github.com/Musadddiqshah/music-am.git
+git clone https://github.com/Musadddiqshah/music-am.git
 cd music-am
-
 python music-am.py
