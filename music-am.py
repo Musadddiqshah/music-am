@@ -77,26 +77,28 @@ REPEAT_MODES = ["off", "one", "all"]
 SLEEP_STEPS = [0, 15, 30, 60]
 TABS = ["All", "Library", "Settings"]
 
-# ---------- 17 equalizer presets ----------
 EQ_PRESETS = {
-    "flat":     "",
-    "bass":     "equalizer=f=60:t=q:w=1:g=8,equalizer=f=120:t=q:w=1:g=4",
-    "bass+":    "equalizer=f=40:t=q:w=1:g=10,equalizer=f=80:t=q:w=1:g=8,equalizer=f=160:t=q:w=1:g=5",
-    "treble":   "equalizer=f=8000:t=q:w=1:g=6",
-    "treble+":  "equalizer=f=6000:t=q:w=1:g=5,equalizer=f=12000:t=q:w=1:g=7",
-    "vocal":    "equalizer=f=3000:t=q:w=1:g=4,equalizer=f=200:t=q:w=1:g=-3",
-    "vocal+":   "equalizer=f=2500:t=q:w=1:g=5,equalizer=f=4000:t=q:w=1:g=4,equalizer=f=180:t=q:w=1:g=-4",
-    "loudness": "dynaudnorm",
-    "night":    "acompressor=threshold=-20dB:ratio=4:attack=5:release=50",
-    "podcast":  "equalizer=f=2500:t=q:w=1:g=3,equalizer=f=100:t=q:w=1:g=-6,acompressor=threshold=-18dB:ratio=3",
-    "rock":     "equalizer=f=100:t=q:w=1:g=4,equalizer=f=1000:t=q:w=1:g=-2,equalizer=f=3000:t=q:w=1:g=3",
-    "pop":      "equalizer=f=200:t=q:w=1:g=-2,equalizer=f=1000:t=q:w=1:g=3,equalizer=f=4000:t=q:w=1:g=2",
-    "jazz":     "equalizer=f=200:t=q:w=1:g=3,equalizer=f=800:t=q:w=1:g=2,equalizer=f=6000:t=q:w=1:g=2",
-    "classical":"equalizer=f=100:t=q:w=1:g=3,equalizer=f=1000:t=q:w=1:g=-1,equalizer=f=8000:t=q:w=1:g=2",
-    "hiphop":   "equalizer=f=80:t=q:w=1:g=7,equalizer=f=2500:t=q:w=1:g=-2,equalizer=f=8000:t=q:w=1:g=3",
-    "acoustic": "equalizer=f=200:t=q:w=1:g=2,equalizer=f=3000:t=q:w=1:g=2,equalizer=f=10000:t=q:w=1:g=3",
-    "edm":      "equalizer=f=60:t=q:w=1:g=6,equalizer=f=10000:t=q:w=1:g=5",
+    # ============ BASIC ============
+    "flat":       "",
+    "treble":     "equalizer=f=8000:t=q:w=1:g=6",
+    "vocal":      "equalizer=f=3000:t=q:w=1:g=4,equalizer=f=200:t=q:w=1:g=-3",
+
+    # ============ 3D SPATIAL (HEADPHONES) ============
+    "3d":         "haas,stereowiden=delay=20:feedback=0.3:crossfeed=0.35:drymix=0.75",
+    "3d-hall":    "haas,stereowiden=delay=30:feedback=0.4:crossfeed=0.45:drymix=0.65,aecho=0.9:0.85:150:0.35",
+
+    # ============ 8D ROTATION (HEADPHONES) ============
+    "8d":         "apulsator=hz=0.1:mode=triangle:amount=1:offset_r=0.25,haas,stereowiden=delay=20:feedback=0.35:crossfeed=0.35:drymix=0.65,aecho=0.8:0.7:100:0.3",
+    "8d-cinema":  "apulsator=hz=0.12:mode=triangle:amount=1:offset_r=0.3,haas,stereowiden=delay=35:feedback=0.45:crossfeed=0.55:drymix=0.45,aecho=0.9:0.8:200:0.35,aecho=0.8:0.7:120:0.25,aecho=0.7:0.6:60:0.15",
+    "8d-vocal":   "apulsator=hz=0.08:mode=triangle:amount=0.8:offset_r=0.2,haas,equalizer=f=2500:t=q:w=1:g=3,equalizer=f=4000:t=q:w=1:g=2,stereowiden=delay=18:feedback=0.3:crossfeed=0.3:drymix=0.7",
+
+    # ============ LO-FI ============
+    "lofi":       "equalizer=f=60:t=q:w=1:g=4,equalizer=f=250:t=q:w=1:g=2,equalizer=f=3000:t=q:w=1:g=-3,equalizer=f=8000:t=q:w=1:g=-4",
+    "lofi-vinyl": "equalizer=f=60:t=q:w=1:g=5,equalizer=f=250:t=q:w=1:g=2,equalizer=f=3000:t=q:w=1:g=-3,equalizer=f=9000:t=q:w=1:g=-5,lowpass=f=9000,aecho=0.8:0.75:50:0.3",
+    "lofi-sleep": "equalizer=f=40:t=q:w=1:g=5,equalizer=f=150:t=q:w=1:g=3,equalizer=f=1000:t=q:w=1:g=-2,equalizer=f=3000:t=q:w=1:g=-5,equalizer=f=8000:t=q:w=1:g=-6,lowpass=f=7000,aecho=0.9:0.85:100:0.5",
+    "lofi-8d":    "apulsator=hz=0.08:mode=sine:amount=0.9:offset_r=0.25,haas,equalizer=f=60:t=q:w=1:g=4,equalizer=f=250:t=q:w=1:g=2,equalizer=f=3000:t=q:w=1:g=-3,equalizer=f=8000:t=q:w=1:g=-4,stereowiden=delay=25:feedback=0.35:crossfeed=0.4:drymix=0.65,aecho=0.85:0.8:100:0.35,lowpass=f=10000",
 }
+
 
 SETTING_SPEC = [
     ("theme", "Theme", "choice", list(THEMES.keys())),
@@ -634,6 +636,11 @@ class App:
         self.play_count = dict(STATE.get("play_count", {}))
         self.positions = dict(STATE.get("positions", {}))
 
+        # Visualizer state
+        self.viz_bars = 8
+        self.viz_phase = 0.0
+        self.viz_heights = [0.0] * self.viz_bars
+
         sess = STATE.get("session") or {}
         if sess.get("queue") and all(os.path.exists(p) for p in sess["queue"]):
             self.queue = list(sess["queue"])
@@ -714,6 +721,43 @@ class App:
         self.history = self.history[:HISTORY_MAX]
         self.play_count[path] = self.play_count.get(path, 0) + 1
 
+    # ---------- visualizer ----------
+    def tick_viz(self):
+        """Animate the bar visualizer (only when playing)."""
+        if not self.is_active():
+            for i in range(self.viz_bars):
+                self.viz_heights[i] *= 0.7
+            return
+        pos = self.gp("time_pos", 0) or 0
+        vol = max(1, self.user_vol)
+        base = (vol / VOL_MAX) * 0.85
+        self.viz_phase = (time.monotonic() * 4.0) % (2 * math.pi)
+        for i in range(self.viz_bars):
+            ph = self.viz_phase + i * 0.7 + (pos * 0.4)
+            s1 = 0.5 + 0.5 * math.sin(ph)
+            s2 = 0.5 + 0.5 * math.sin(ph * 1.7 + 1.3)
+            s3 = random.random() * 0.15
+            target = base * (0.35 + 0.55 * ((s1 + s2) / 2) + s3)
+            self.viz_heights[i] = self.viz_heights[i] * 0.6 + target * 0.4
+            if self.viz_heights[i] > 1.0:
+                self.viz_heights[i] = 1.0
+
+    def draw_viz(self, h, w, right_x):
+        """Draw small bars near the right side of the chips row."""
+        if not self.current_path:
+            return
+        blocks = " ▁▂▃▄▅▆▇█"
+        bar_x = max(2, right_x)
+        y = h - 2
+        for i in range(self.viz_bars):
+            hgt = self.viz_heights[i]
+            idx = int(round(hgt * (len(blocks) - 1)))
+            ch = blocks[idx] if idx < len(blocks) else "█"
+            if bar_x + i >= w - 1:
+                break
+            color = 5 if hgt > 0.6 else (7 if hgt > 0.35 else 4)
+            safe(self.scr, y, bar_x + i, ch, curses.color_pair(color) | curses.A_BOLD)
+
     # ---------- playback ----------
     def is_active(self):
         return (bool(self.current_path)
@@ -756,10 +800,20 @@ class App:
             self.status = action[1]
 
     def start_fade_out(self, action):
-        if self.is_active():
-            self.fade.update(phase="out", t0=time.monotonic(), dur=FADE_SECONDS, action=action)
-        else:
+        # If already fading out with same action, don't restart
+        if (self.fade["phase"] == "out" and self.fade.get("action") == action):
+            return
+        # If not playing, just execute the action immediately
+        if not self.is_active():
             self.run_action(action)
+            return
+        # Start fade-out with new action
+        self.fade.update(
+            phase="out",
+            t0=time.monotonic(),
+            dur=FADE_SECONDS,
+            action=action
+        )
 
     def start_track(self, path):
         self.start_fade_out(("play", path))
@@ -798,8 +852,12 @@ class App:
             self.save_session()
 
     def maybe_autonext(self):
-        if (self.queue and self.fade["phase"] is None and self.status == "PLAYING"
-                and not self.gp("pause", False) and self.gp("idle_active", False)
+        # Only trigger auto-next when not in fade transition
+        if (self.queue
+                and self.fade["phase"] is None
+                and self.status == "PLAYING"
+                and not self.gp("pause", False)
+                and self.gp("idle_active", False)
                 and time.monotonic() - self.last_play > 1.5):
             self.next_track(auto=True)
 
@@ -820,8 +878,9 @@ class App:
     def next_track(self, step=1, auto=False):
         if not self.queue:
             return
+        # Repeat-ONE: restart current track with fade
         if auto and self.repeat == "one" and self.q_idx >= 0:
-            self.start_track(self.queue[self.q_idx])
+            self.start_fade_out(("play", self.queue[self.q_idx]))
             return
         n = self.q_idx + step
         if n >= len(self.queue) or n < 0:
@@ -833,7 +892,7 @@ class App:
             else:
                 n = 0
         self.q_idx = n
-        self.start_track(self.queue[n])
+        self.start_fade_out(("play", self.queue[n]))
 
     def toggle_pause(self):
         if not self.current_path:
@@ -1260,17 +1319,30 @@ class App:
         self.eq_menu_open = True
         keys = list(EQ_PRESETS.keys())
         self.eq_menu_idx = keys.index(self.eq) if self.eq in keys else 0
+        self.eq_menu_scroll = 0
 
     def handle_eq_menu(self, code, ch):
         keys = list(EQ_PRESETS.keys())
         if code == 27:
             self.eq_menu_open = False
             return True
-        if code == curses.KEY_UP:
+        if code == curses.KEY_UP or ch == "k":
             self.eq_menu_idx = max(0, self.eq_menu_idx - 1)
             return True
-        if code == curses.KEY_DOWN:
+        if code == curses.KEY_DOWN or ch == "j":
             self.eq_menu_idx = min(len(keys) - 1, self.eq_menu_idx + 1)
+            return True
+        if code == curses.KEY_PPAGE:
+            self.eq_menu_idx = max(0, self.eq_menu_idx - 10)
+            return True
+        if code == curses.KEY_NPAGE:
+            self.eq_menu_idx = min(len(keys) - 1, self.eq_menu_idx + 10)
+            return True
+        if ch == "g":
+            self.eq_menu_idx = 0
+            return True
+        if ch == "G":
+            self.eq_menu_idx = len(keys) - 1
             return True
         if code in (10, 13, ord(" ")):
             self.eq = keys[self.eq_menu_idx]
@@ -1451,7 +1523,7 @@ class App:
             names = {1: "Folders", 2: "Recent", 3: "Playlists",
                      4: "Favorite", 5: "Queue", 6: "Stats"}
             x += 2
-            crumb = f"▸ Library / {names.get(self.lib_view, '')}  (Backspace = wapas)"
+            crumb = f"▸ Library / {names.get(self.lib_view, '')}  ( BKSP = back)"
             safe(self.scr, 1, x, crumb, curses.color_pair(4) | curses.A_BOLD)
 
         if self.search_on:
@@ -1460,13 +1532,13 @@ class App:
                    f"↑↓ move · ⏎ play · Esc close")
         elif self.tab == 0:
             if self.folder_filter:
-                sub = f"   {os.path.basename(self.folder_filter)}  ·  1 = poora All"
+                sub = f"   {os.path.basename(self.folder_filter)} · 1 = All"
             else:
                 sub = " All songs  ·  alphabetical"
         elif self.tab == 1:
             lv = self.lib_view
             if lv == 0:
-                sub = " Library menu  ·  ⏎ = open  ·  ← / Backspace = wapas"
+                sub = " Library menu  · ENTER = open · ← / Backspace = return"
             elif lv == 1:
                 rel = os.path.relpath(self.cur_dir, ROOT) if self.cur_dir != ROOT else "."
                 sub = f"   {rel}  ·  ⏎ = enter  ·  ⌫ = up  ·  a = play all  ·  o = All view"
@@ -1641,19 +1713,54 @@ class App:
     def draw_eq_menu(self, h, w):
         for y in range(4, h - 5):
             safe(self.scr, y, 0, " " * (w - 1))
-        safe(self.scr, 4, 2, " Equalizer Presets  (↑↓ · ⏎ = apply · Esc = cancel)",
+
+        safe(self.scr, 4, 2, " Equalizer Presets  (Up/Down scroll | Enter apply | Esc cancel)",
              curses.color_pair(2) | curses.A_BOLD)
-        safe(self.scr, 5, 2, "─" * (w - 5), curses.color_pair(6))
+        safe(self.scr, 5, 2, "-" * (w - 5), curses.color_pair(6))
+
         keys = list(EQ_PRESETS.keys())
-        y = 6
-        for i, k in enumerate(keys):
-            if y >= h - 5:
-                break
-            marker = "  " if i == self.eq_menu_idx else "   "
-            current = " ●" if k == self.eq else ""
-            attr = (curses.color_pair(3) | curses.A_BOLD) if i == self.eq_menu_idx else curses.color_pair(11)
-            safe(self.scr, y, 2, f"{marker}{k}{current}", attr)
+        total = len(keys)
+        if total == 0:
+            return
+
+        top = 6
+        bot = h - 5
+        visible = max(1, bot - top)
+
+        if getattr(self, "eq_menu_scroll", 0) is None:
+            self.eq_menu_scroll = 0
+        if self.eq_menu_idx < self.eq_menu_scroll:
+            self.eq_menu_scroll = self.eq_menu_idx
+        elif self.eq_menu_idx >= self.eq_menu_scroll + visible:
+            self.eq_menu_scroll = self.eq_menu_idx - visible + 1
+
+        max_scroll = max(0, total - visible)
+        self.eq_menu_scroll = max(0, min(self.eq_menu_scroll, max_scroll))
+
+        end = min(total, self.eq_menu_scroll + visible)
+        y = top
+        for i in range(self.eq_menu_scroll, end):
+            k = keys[i]
+            if i == self.eq_menu_idx:
+                prefix = " > "
+                current = " (active)" if k == self.eq else ""
+                line = (prefix + k + current).ljust(w - 2)
+                safe(self.scr, y, 0, line,
+                     curses.color_pair(3) | curses.A_BOLD)
+            else:
+                current = " (active)" if k == self.eq else ""
+                safe(self.scr, y, 2, f"   {k}{current}", curses.color_pair(11))
             y += 1
+
+        if self.eq_menu_scroll > 0:
+            safe(self.scr, top - 1, max(2, w - 12), " ^ more ",
+                 curses.color_pair(4) | curses.A_BOLD)
+        if end < total:
+            safe(self.scr, bot, max(2, w - 12), " v more ",
+                 curses.color_pair(4) | curses.A_BOLD)
+
+        pos_text = f" {self.eq_menu_idx + 1}/{total} "
+        safe(self.scr, bot, max(2, w - 20), pos_text, curses.color_pair(2))
 
     def draw_theme_menu(self, h, w):
         for y in range(4, h - 5):
@@ -1717,12 +1824,18 @@ class App:
         if self.sleep_until:
             rem = max(0, int(self.sleep_until - time.monotonic()))
             chips.append(f"zz{rem // 60:02d}:{rem % 60:02d}")
-        safe(self.scr, h - 2, 1, " ".join(chips), curses.color_pair(2))
+        chip_text = " ".join(chips)
+        safe(self.scr, h - 2, 1, chip_text, curses.color_pair(2))
+
+        # Small bar visualizer, right side of chips row
+        if self.current_path:
+            viz_x = min(w - self.viz_bars - 2, len(chip_text) + 3)
+            self.draw_viz(h, w, viz_x)
 
         if w >= 70:
-            hint = " 1-3 tabs  ↑↓  ⏎  ␣  n/p  E=EQ  ⇧E=theme  /  ?  q"
+            hint = " 1-3 tabs  ↑↓  ⏎  ␣  n/p  E=EQ  e=change  /  ?  q"
         else:
-            hint = " E=EQ  ⇧E=theme  ? help"
+            hint = " E=EQ • e=Change • ? help"
         safe(self.scr, h - 1, 0, hint, curses.color_pair(6))
 
     def draw_help(self, h, w):
@@ -1921,6 +2034,7 @@ class App:
                 self.tick_sleep()
                 self.tick_library()
                 self.tick_session()
+                self.tick_viz()
                 self.maybe_autonext()
                 self.draw()
                 code, ch = read_key(self.scr)
