@@ -5,7 +5,9 @@
 # Cache  : ~/.cache/music-am/library.json
 
 import os, sys, re, copy, json, time, math, random, curses, threading, textwrap
-import atexit, signal
+import atexit, signal, subprocess
+import urllib.request
+import urllib.parse
 
 os.environ.setdefault("ESCDELAY", "25")
 
@@ -31,7 +33,7 @@ STATE_PATH = os.path.expanduser("~/.config/music-am/state.json")
 CACHE_DIR = os.path.expanduser("~/.cache/music-am")
 INDEX_PATH = os.path.join(CACHE_DIR, "library.json")
 
-FADE_SECONDS = 0.4
+DEFAULT_FADE_MS = 400  # milliseconds (default 0.4 sec)
 HISTORY_MAX = 200
 RESUME_MIN = 10
 RESUME_NEAR_END = 30
@@ -113,6 +115,9 @@ SETTING_SPEC = [
     ("show_counts", "Folder song counts", "bool", None),
     ("show_meta", "Artist / title tags", "bool", None),
     ("resume", "Resume last position", "bool", None),
+    ("lyrics_display", "Lyrics display lang", "choice", ["all", "hi", "ur", "rom", "en"]),
+    ("fade_ms", "Fade duration (ms)", "int", (0, 2000, 100)),
+    ("crossfade", "Crossfade (overlap)", "bool", None),
 ]
 
 DEFAULTS = {
@@ -131,6 +136,8 @@ DEFAULTS = {
         "shuffle": False,
         "repeat": "off",
         "eq": "flat",
+        "fade_ms": 400,
+        "crossfade": False,
         "extra_flags": ["--no-video", "--idle=yes", "--no-resume-playback"],
     },
     "ui": {
@@ -141,6 +148,7 @@ DEFAULTS = {
         "show_counts": True,
         "show_meta": True,
         "resume": True,
+        "lyrics_display": "all",
     },
     "keys": {
         "search": "/", "play_all": "a", "shuffle": "s", "repeat": "r",
@@ -203,6 +211,9 @@ def build_settings():
         "show_counts": bool(ui["show_counts"]),
         "show_meta": bool(ui["show_meta"]),
         "resume": bool(ui.get("resume", True)),
+        "lyrics_display": ui.get("lyrics_display", "all"),
+        "fade_ms": int(pl.get("fade_ms", DEFAULT_FADE_MS)),
+        "crossfade": bool(pl.get("crossfade", False)),
     }
     for k, v in STATE.get("settings", {}).items():
         if k in s:
@@ -252,6 +263,88 @@ def build_mpv_opts(flags):
     opts.setdefault("resume_playback", "no")
     opts.setdefault("volume_max", str(VOL_MAX))
     return opts
+
+
+
+_CHAFA_OK = None
+
+def chafa_available():
+    global _CHAFA_OK
+    if _CHAFA_OK is None:
+        try:
+            r = subprocess.run(["chafa", "--version"], capture_output=True, timeout=2)
+            _CHAFA_OK = (r.returncode == 0)
+        except Exception:
+            _CHAFA_OK = False
+    return _CHAFA_OK
+
+
+def extract_cover(path):
+    """Extract embedded cover art to temp file."""
+    if not META_ON:
+        return None
+    try:
+        import hashlib
+        cache_dir = os.path.expanduser("~/.cache/music-am/covers")
+        os.makedirs(cache_dir, exist_ok=True)
+        h = hashlib.md5(path.encode()).hexdigest()
+        out = os.path.join(cache_dir, h + ".jpg")
+        if os.path.exists(out) and os.path.getsize(out) > 100:
+            return out
+        m = MutagenFile(path)
+        if not m:
+            return None
+        data = None
+        try:
+            keys = list(m.keys())
+        except Exception:
+            keys = []
+        for key in keys:
+            ku = key.upper()
+            if not (ku.startswith("APIC") or ku in ("COVR", "COVERART", "METADATA_BLOCK_PICTURE")):
+                continue
+            try:
+                v = m.get(key)
+                if v is None:
+                    continue
+                item = v[0] if isinstance(v, list) else v
+                d = getattr(item, "data", item)
+                if isinstance(d, str):
+                    import base64
+                    d = base64.b64decode(d)
+                if isinstance(d, (bytes, bytearray)) and len(d) > 100:
+                    data = bytes(d)
+                    break
+            except Exception:
+                continue
+        if data:
+            with open(out, "wb") as f:
+                f.write(data)
+            return out
+    except Exception:
+        pass
+    return None
+
+
+def render_cover(path, w, h):
+    """Render cover via chafa."""
+    if not chafa_available():
+        return None
+    cover = extract_cover(path)
+    if not cover:
+        return None
+    try:
+        r = subprocess.run(
+            ["chafa", "--format=symbols", "--colors=256", "--size", f"{w}x{h}", cover],
+            capture_output=True, timeout=3
+        )
+        if r.returncode != 0:
+            return None
+        raw = r.stdout.decode("utf-8", "ignore").rstrip("\n")
+        lines = [re.sub(r"\x1b\[[0-9;]*m", "", ln) for ln in raw.split("\n")]
+        return lines[:h]
+    except Exception:
+        return None
 
 
 # ---------- file helpers ----------
@@ -314,26 +407,176 @@ def read_meta(path):
     return info
 
 
-def read_lrc(path):
+
+
+def detect_language_type(text):
+    """Detect which language a lyrics text is in.
+    Returns: "hi" | "ur" | "rom" | "en" | "unknown"
+    """
+    if not text:
+        return "unknown"
+
+    devanagari = sum(1 for ch in text if '\u0900' <= ch <= '\u097F')
+    arabic = sum(1 for ch in text if '\u0600' <= ch <= '\u06FF' or '\u0750' <= ch <= '\u077F')
+    total_chars = len(text.replace(' ', '').replace('\n', ''))
+
+    if total_chars == 0:
+        return "unknown"
+
+    # Devanagari dominant
+    if devanagari / total_chars > 0.3:
+        return "hi"
+    # Arabic/Urdu dominant
+    if arabic / total_chars > 0.3:
+        return "ur"
+
+    # Roman detection (Hindi/Urdu transliteration)
+    text_lower = text.lower()
+    roman_markers = {
+        'hai', 'ka', 'ki', 'ke', 'ko', 'mein', 'me', 'se', 'aur', 'nahi', 'nahin',
+        'kya', 'kyun', 'kyon', 'kab', 'jab', 'ab', 'tab', 'yeh', 'ye', 'woh', 'wo',
+        'mera', 'meri', 'mere', 'tera', 'teri', 'tere', 'uska', 'uski', 'uske',
+        'dil', 'pyar', 'pyaar', 'ishq', 'mohabbat', 'aashiqui', 'yaar', 'sanam',
+        'jaan', 'jaana', 'jaaneman', 'sajan', 'sathi', 'saath', 'baat', 'dilbar',
+        'aankhon', 'aankhein', 'aansu', 'khushi', 'gham', 'ghum', 'dard', 'duniya',
+        'zindagi', 'jeevan', 'sapna', 'sapne', 'khwab', 'khwaab', 'raat', 'din',
+        'subah', 'shaam', 'chand', 'sitare', 'tara', 'suraj', 'hawa', 'paani',
+        'aag', 'mitti', 'phool', 'khushbu', 'baadal', 'barish', 'saawan',
+        'haseena', 'haseen', 'roop', 'soorat', 'nazar', 'nazara', 'chehra',
+        'honth', 'hont', 'aankh', 'palke', 'baal', 'zulf', 'gajra',
+        'kaliyan', 'kaante', 'kaaton', 'haar', 'guldasta',
+        'milan', 'judaai', 'virah', 'intezaar', 'intezar', 'umeed', 'ummeed',
+        'aasha', 'asha', 'vishwas', 'bharosa', 'yaqeen', 'yakeen', 'dilasa',
+        'aawara', 'awara', 'baawra', 'bawra', 'deewana', 'diwana', 'paagal',
+        'mast', 'mastaana', 'mastana', 'magan', 'kho', 'khoya', 'khoyi',
+        'haseenon', 'bulaya', 'bulaaya', 'gale', 'lagaaya', 'samajhaaya',
+        'samajh', 'bholaa', 'bechaaraa', 'jaane', 'wale', 'hun', 'hoon',
+        'tha', 'thi', 'the', 'kar', 'karke', 'hoke', 'hokar', 'raha', 'rahi', 'rahe',
+        'gaya', 'gayi', 'gaye', 'liya', 'diya', 'kiya', 'hua', 'hui', 'hue',
+    }
+    words = re.findall(r"[a-zA-Z']+", text_lower)
+    if not words:
+        return "unknown"
+    matches = sum(1 for w in words if w in roman_markers)
+
+    # If more than 20% words are Roman Hindi/Urdu markers → roman
+    if matches / len(words) > 0.20:
+        return "rom"
+
+    return "en"
+
+
+def is_desired_lyrics_language(text, lang_filter="all"):
+    """Check if lyrics match the requested language filter.
+    lang_filter: "hi" | "ur" | "rom" | "all" | "en" | "any"
+    """
+    detected = detect_language_type(text)
+
+    if lang_filter == "any":
+        return True
+    if lang_filter == "all":
+        return detected in ("hi", "ur", "rom")
+    if lang_filter == "hi":
+        return detected == "hi"
+    if lang_filter == "ur":
+        return detected == "ur"
+    if lang_filter == "rom":
+        return detected == "rom"
+    if lang_filter == "en":
+        return detected == "en"
+
+    return False
+
+
+def filter_lyrics_by_language(lrc_data, lang_filter="all"):
+    """Filter .lrc data by language."""
+    if not lrc_data:
+        return lrc_data
+    all_text = " ".join(text for _, text in lrc_data if text)
+    if is_desired_lyrics_language(all_text, lang_filter):
+        return lrc_data
+    return []
+
+
+def r_lyrics_by_language(lrc_data):
+    """Filter .lrc data — keep only Hindi/Urdu/Roman lyrics."""
+    if not lrc_data:
+        return lrc_data
+    # Get all text
+    all_text = " ".join(text for _, text in lrc_data if text)
+    if is_desired_lyrics_language(all_text):
+        return lrc_data
+    # Not desired language (likely English) → return empty to skip
+    return []
+
+
+def read_lrc(path, lang_filter=None):
+    """Read .lrc file. Supports multi-language format:
+       [MM:SS.xx]{lang}text
+       Or plain: [MM:SS.xx]text
+    Returns list of (time, text) filtered by display language.
+    """
     lrc_path = os.path.splitext(path)[0] + ".lrc"
     if not os.path.exists(lrc_path):
         return []
-    out = []
-    pat = re.compile(r"\[(\d+):(\d+(?:\.\d+)?)\]")
+
+    if lang_filter is None:
+        lang_filter = SET.get("lyrics_display", "all")
+
+    all_lines = []  # (time, lang, text) — lang="" for plain
+    pat = re.compile(r"\[(\d+):(\d+(?:\.\d+)?)\](?:\{([a-zA-Z]+)\})?(.*)")
     try:
         with open(lrc_path, encoding="utf-8", errors="ignore") as f:
             for line in f:
                 line = line.rstrip("\n")
-                times = pat.findall(line)
-                if not times:
+                m = pat.match(line)
+                if not m:
                     continue
-                text = pat.sub("", line).strip()
-                for mm, ss in times:
-                    t = int(mm) * 60 + float(ss)
-                    out.append((t, text))
+                mm, ss, lang, text = m.groups()
+                t = int(mm) * 60 + float(ss)
+                text = text.strip()
+                if not text:
+                    continue
+                lang = (lang or "").lower()
+                all_lines.append((t, lang, text))
     except Exception:
         pass
-    out.sort(key=lambda x: x[0])
+
+    all_lines.sort(key=lambda x: x[0])
+
+    # Group by time — pick best language
+    out = []
+    for t, lang, text in all_lines:
+        if lang_filter == "all":
+            # Show one line per time, prefer original script order
+            out.append((t, text))
+        elif lang_filter == "hi":
+            if lang == "hi" or (lang == "" and detect_language_type(text) == "hi"):
+                out.append((t, text))
+        elif lang_filter == "ur":
+            if lang == "ur" or (lang == "" and detect_language_type(text) == "ur"):
+                out.append((t, text))
+        elif lang_filter == "rom":
+            if lang == "rom" or (lang == "" and detect_language_type(text) == "rom"):
+                out.append((t, text))
+        elif lang_filter == "en":
+            if lang == "en" or (lang == "" and detect_language_type(text) == "en"):
+                out.append((t, text))
+        elif lang_filter == "any":
+            out.append((t, text))
+        else:
+            out.append((t, text))
+
+    # Dedupe same-time entries (if multiple langs matched)
+    if lang_filter == "all":
+        seen_t = {}
+        deduped = []
+        for t, text in out:
+            if t not in seen_t:
+                seen_t[t] = True
+                deduped.append((t, text))
+        return deduped
+
     return out
 
 
@@ -466,16 +709,74 @@ def list_label(path):
 
 
 def search_tracks(query):
-    q = query.strip().lower()
+    """Search with filters: /artist:, /album:, /recent, /fav, /eq:8d, or plain query."""
+    q = query.strip()
+    filter_type = None
+    filter_value = ""
+
+    # Parse filters
+    if q.startswith("artist:"):
+        filter_type = "artist"
+        filter_value = q[7:].strip().lower()
+    elif q.startswith("album:"):
+        filter_type = "album"
+        filter_value = q[6:].strip().lower()
+    elif q.startswith("title:"):
+        filter_type = "title"
+        filter_value = q[6:].strip().lower()
+    elif q.startswith("recent") or q == "r":
+        filter_type = "recent"
+    elif q.startswith("fav"):
+        filter_type = "fav"
+    elif q.startswith("eq:"):
+        filter_type = "eq"
+        filter_value = q[3:].strip()
+    else:
+        filter_value = q.lower()
+
     hits = []
-    for path, info in list(LIB.tracks.items()):
-        if q:
+    if filter_type == "artist":
+        for path, info in LIB.tracks.items():
+            if filter_value in (info.get("a", "").lower()):
+                hits.append(path)
+    elif filter_type == "album":
+        for path, info in LIB.tracks.items():
+            if filter_value in (info.get("al", "").lower()):
+                hits.append(path)
+    elif filter_type == "title":
+        for path, info in LIB.tracks.items():
+            if filter_value in info.get("t", "").lower() or filter_value in os.path.basename(path).lower():
+                hits.append(path)
+    elif filter_type == "recent":
+        # Last 50 from history
+        seen = set()
+        for h in App._current_app.history if hasattr(App, "_current_app") else []:
+            p = h.get("p")
+            if p and p not in seen and os.path.exists(p):
+                hits.append(p)
+                seen.add(p)
+                if len(hits) >= 50:
+                    break
+    elif filter_type == "fav":
+        if hasattr(App, "_current_app"):
+            for p in App._current_app.favorites:
+                if os.path.exists(p):
+                    hits.append(p)
+    elif filter_type == "eq":
+        if hasattr(App, "_current_app"):
+            track_eq = App._current_app.track_eq
+            for p, eq in track_eq.items():
+                if filter_value.lower() in eq.lower() and os.path.exists(p):
+                    hits.append(p)
+    else:
+        # Plain search
+        for path, info in LIB.tracks.items():
             hay = " ".join((os.path.basename(path), info.get("t", ""),
                             info.get("a", ""), info.get("al", ""))).lower()
-            if q not in hay:
-                continue
-        hits.append(path)
-    hits.sort(key=lambda p: (not list_label(p).lower().startswith(q), list_label(p).lower()))
+            if not filter_value or filter_value in hay:
+                hits.append(path)
+
+    hits.sort(key=lambda p: (not list_label(p).lower().startswith(filter_value), list_label(p).lower()))
     return hits
 
 
@@ -574,14 +875,19 @@ HELP = [
     " t / T        sleep timer cycle / custom",
     " a            play visible list / current folder",
     " s / r        shuffle · repeat",
-    " /            search         Esc = close",
-    " i            track info     L    lyrics (.lrc)",
+    " /            search (artist: / album: / title: / recent / fav / eq:name)",
+    " K / J        queue: move item up / down",
+    " Esc          close search bar or cancel visual mode",
+    " i            track info     L    lyrics (auto-fetch all langs)",
+    "              Settings → Lyrics display lang: all/hi/ur/rom/en",
+    "              Esc/BKSP closes lyrics or info",
     " N            now-playing popup",
     " R            library rescan",
     " w / b        save .m3u · bookmarks",
     " d / c        queue: remove / clear",
     " x            delete track from disk (confirm)",
     " f            toggle favorite (current track)",
+    " y            random song from library",
     " q            quit",
     "",
     " Press any key to close",
@@ -590,6 +896,7 @@ HELP = [
 
 class App:
     def __init__(self, scr, player):
+        App._current_app = self
         self.scr = scr
         self.p = player
         self.tab = 0
@@ -609,7 +916,8 @@ class App:
         self.sleep_i = 0
         self.sleep_until = 0.0
         self.last_play = 0.0
-        self.fade = {"phase": None, "t0": 0.0, "dur": FADE_SECONDS, "action": None}
+        fade_dur = max(0.0, min(2.0, SET.get("fade_ms", 400) / 1000.0))
+        self.fade = {"phase": None, "t0": 0.0, "dur": fade_dur, "action": None}
         self.bookmarks = list(STATE.get("bookmarks", []))
         self.favorites = set(STATE.get("favorites", []))
         self.help_open = False
@@ -633,6 +941,8 @@ class App:
         self._was_scanning = False
 
         self.history = list(STATE.get("history", []))[:HISTORY_MAX]
+        self.secondary_player = None   # for crossfade
+        self.crossfade_active = False
         self.play_count = dict(STATE.get("play_count", {}))
         self.positions = dict(STATE.get("positions", {}))
 
@@ -758,6 +1068,73 @@ class App:
             color = 5 if hgt > 0.6 else (7 if hgt > 0.35 else 4)
             safe(self.scr, y, bar_x + i, ch, curses.color_pair(color) | curses.A_BOLD)
 
+    def send_notification(self, path):
+        """Send Android notification when track changes (Termux only)."""
+        try:
+            title = track_title(path)
+            info = LIB.tracks.get(path, {})
+            artist = info.get("a") or ""
+            dur = info.get("l", 0) or 0
+            content = f"{artist} - {title}" if artist else title
+            if dur:
+                content += f" ({fmt_time(dur)})"
+            # Only if termux-api is available
+            subprocess.run(
+                ["termux-notification",
+                 "--title", "music-am",
+                 "--content", content[:200],
+                 "--priority", "low",
+                 "--id", "music-am-nowplaying"],
+                capture_output=True, timeout=2
+            )
+        except Exception:
+            pass  # silently ignore if not on Termux
+
+    def crossfade_to(self, next_path):
+        """Real crossfade: play next song on second mpv with overlap."""
+        if not SET.get("crossfade", False):
+            # Not enabled — normal switch
+            self.start_fade_out(("play", next_path))
+            return
+        try:
+            import mpv as mpv_module
+            # Create second player if doesn't exist
+            if self.secondary_player is None:
+                self.secondary_player = mpv_module.MPV(**build_mpv_opts(EXTRA_FLAGS))
+            sec = self.secondary_player
+            # Set low volume
+            sec.volume = 0
+            sec.play(next_path)
+            # Fade out current, fade in secondary
+            self.start_fade_out(("crossfade_finish", next_path))
+        except Exception as e:
+            # Fallback to normal
+            self.status = f"Crossfade error: {str(e)[:30]}"
+            self.start_fade_out(("play", next_path))
+
+    def finish_crossfade(self, path):
+        """Swap primary and secondary players after crossfade."""
+        try:
+            if self.secondary_player is None:
+                self.start_track(path)
+                return
+            # Stop primary, swap references
+            try:
+                self.p.stop()
+            except Exception:
+                pass
+            # Swap
+            self.p, self.secondary_player = self.secondary_player, self.p
+            self._safe_set("volume", self.user_vol)
+            self.current_path = path
+            self.last_play = time.monotonic()
+            self.status = "PLAYING"
+            self.apply_eq()
+            self.send_notification(path)
+            self.add_history(path)
+        except Exception as e:
+            self.status = f"Crossfade swap error: {str(e)[:30]}"
+
     # ---------- playback ----------
     def is_active(self):
         return (bool(self.current_path)
@@ -774,6 +1151,7 @@ class App:
             self.last_play = time.monotonic()
             self.status = "PLAYING"
             self.apply_eq()
+            self.send_notification(path)
             self.add_history(path)
             if SET["resume"]:
                 pos = self.positions.get(path)
@@ -784,9 +1162,23 @@ class App:
                         pass
         except Exception as e:
             self.status = f"ERROR: {str(e)[:40]}"
-
     def start_fade_in(self):
-        self.fade.update(phase="in", t0=time.monotonic(), dur=FADE_SECONDS, action=None)
+        dur = max(0.0, min(2.0, SET.get("fade_ms", 400) / 1000.0))
+        if dur <= 0.01:
+            self.fade.update(phase=None, action=None)
+            self._safe_set("volume", self.user_vol)
+            return
+        self.fade.update(
+            phase="in",
+            t0=time.monotonic(),
+            dur=dur,
+            action=None
+        )
+
+
+
+
+
 
     def run_action(self, action):
         self.fade.update(phase=None, action=None)
@@ -794,6 +1186,8 @@ class App:
             self._safe_set("volume", 0)
             self.play_now(action[1])
             self.start_fade_in()
+        elif action[0] == "crossfade_finish":
+            self.finish_crossfade(action[1])
         else:
             self._safe_set("pause", True)
             self._safe_set("volume", self.user_vol)
@@ -803,15 +1197,17 @@ class App:
         # If already fading out with same action, don't restart
         if (self.fade["phase"] == "out" and self.fade.get("action") == action):
             return
-        # If not playing, just execute the action immediately
+        dur = max(0.0, min(2.0, SET.get("fade_ms", 400) / 1000.0))
+        if dur <= 0.01:
+            self.run_action(action)
+            return
         if not self.is_active():
             self.run_action(action)
             return
-        # Start fade-out with new action
         self.fade.update(
             phase="out",
             t0=time.monotonic(),
-            dur=FADE_SECONDS,
+            dur=dur,
             action=action
         )
 
@@ -821,6 +1217,13 @@ class App:
     def tick_fade(self):
         f = self.fade
         if f["phase"] is None:
+            return
+        if f["dur"] <= 0:
+            if f["phase"] == "out":
+                self.run_action(f["action"])
+            else:
+                f["phase"] = None
+                self._safe_set("volume", self.user_vol)
             return
         p = min(1.0, (time.monotonic() - f["t0"]) / f["dur"])
         e = 0.5 - 0.5 * math.cos(math.pi * p)
@@ -892,7 +1295,11 @@ class App:
             else:
                 n = 0
         self.q_idx = n
-        self.start_fade_out(("play", self.queue[n]))
+        # Use crossfade if enabled
+        if SET.get("crossfade", False):
+            self.crossfade_to(self.queue[n])
+        else:
+            self.start_fade_out(("play", self.queue[n]))
 
     def toggle_pause(self):
         if not self.current_path:
@@ -1067,31 +1474,53 @@ class App:
         return rows
 
     def build_stats(self):
+        now = time.time()
+        week_ago = now - 7 * 24 * 3600
+        month_ago = now - 30 * 24 * 3600
+
+        # Count plays by time
+        week_plays = sum(1 for h in self.history if h.get("t", 0) > week_ago)
+        month_plays = sum(1 for h in self.history if h.get("t", 0) > month_ago)
+        total_plays = sum(self.play_count.values())
+
+        # Total library stats
         total_tracks = len(LIB.tracks)
         total_sec = sum(float(v.get("l", 0) or 0) for v in LIB.tracks.values())
         total_size = sum(int(v.get("s", 0) or 0) for v in LIB.tracks.values())
-        total_plays = sum(self.play_count.values())
-        artist_sec = {}
-        for p, info in LIB.tracks.items():
-            a = info.get("a") or "—"
-            artist_sec[a] = artist_sec.get(a, 0.0) + float(info.get("l", 0) or 0)
-        top_artist = max(artist_sec.items(), key=lambda x: x[1])[0] if artist_sec else "—"
-        top_track = "—"
-        if self.play_count:
-            tp = max(self.play_count.items(), key=lambda x: x[1])[0]
-            if os.path.exists(tp):
-                top_track = track_title(tp)
-        lines = [
-            ("Tracks", f"{total_tracks}"),
-            ("Total time", fmt_time(total_sec)),
-            ("Total size", fmt_size(total_size)),
-            ("Total plays", f"{total_plays}"),
-            ("Top artist", top_artist),
-            ("Top track", top_track),
-            ("Favorites", f"{len(self.favorites)}"),
-            ("History entries", f"{len(self.history)}"),
-        ]
-        return [("stat", f"{k:<16} {v}", None) for k, v in lines]
+
+        # Top artists
+        artist_plays = {}
+        for p, count in self.play_count.items():
+            info = LIB.tracks.get(p, {})
+            a = info.get("a") or "-"
+            artist_plays[a] = artist_plays.get(a, 0) + count
+        top_artists = sorted(artist_plays.items(), key=lambda x: x[1], reverse=True)[:5]
+
+        # Top tracks
+        top_tracks = []
+        for p, count in sorted(self.play_count.items(), key=lambda x: x[1], reverse=True)[:5]:
+            if os.path.exists(p):
+                top_tracks.append((track_title(p), count))
+
+        # Build rows
+        rows = []
+        rows.append(("stat", f"{'Tracks':<20} {total_tracks}", None))
+        rows.append(("stat", f"{'Total time':<20} {fmt_time(total_sec)}", None))
+        rows.append(("stat", f"{'Total size':<20} {fmt_size(total_size)}", None))
+        rows.append(("stat", f"{'Total plays':<20} {total_plays}", None))
+        rows.append(("stat", f"{'This week':<20} {week_plays} plays", None))
+        rows.append(("stat", f"{'This month':<20} {month_plays} plays", None))
+        rows.append(("stat", f"{'Favorites':<20} {len(self.favorites)}", None))
+        rows.append(("stat", f"{'History entries':<20} {len(self.history)}", None))
+        rows.append(("sep", "-" * 40, None))
+        rows.append(("stat", f"TOP ARTISTS", None))
+        for i, (a, cnt) in enumerate(top_artists, 1):
+            rows.append(("stat", f"  {i}. {a[:30]:<30} {cnt}x", None))
+        rows.append(("sep", "-" * 40, None))
+        rows.append(("stat", f"TOP TRACKS", None))
+        for i, (t, cnt) in enumerate(top_tracks, 1):
+            rows.append(("stat", f"  {i}. {t[:30]:<30} {cnt}x", None))
+        return rows
 
     def build_settings(self):
         out = []
@@ -1166,6 +1595,57 @@ class App:
         self.idx = 0
         self.scroll = 0
         self.persist()
+
+    def _show_smart_playlist(self, kind):
+        """Build and play a smart playlist based on kind."""
+        paths = []
+        if kind == "recent_added":
+            # Files sorted by mtime, last 50
+            all_p = [(p, os.path.getmtime(p)) for p in LIB.all_paths if os.path.exists(p)]
+            all_p.sort(key=lambda x: x[1], reverse=True)
+            paths = [p for p, _ in all_p[:50]]
+            title = "Recently Added (50)"
+        elif kind == "most_played":
+            sorted_plays = sorted(self.play_count.items(), key=lambda x: x[1], reverse=True)
+            paths = [p for p, n in sorted_plays[:50] if os.path.exists(p)]
+            title = "Most Played (50)"
+        elif kind == "never_played":
+            paths = [p for p in LIB.all_paths if p not in self.play_count][:100]
+            title = "Never Played (100)"
+        elif kind == "same_artist":
+            cur = self.current_path or (self.queue[self.q_idx] if self.queue and self.q_idx >= 0 else None)
+            if cur:
+                cur_info = LIB.tracks.get(cur, {})
+                artist = cur_info.get("a")
+                if artist:
+                    paths = [p for p, info in LIB.tracks.items() if info.get("a") == artist]
+                    title = f"Same Artist: {artist}"
+                else:
+                    self.status = "Current track has no artist tag"
+                    return
+            else:
+                self.status = "Play a track first"
+                return
+        elif kind == "same_album":
+            cur = self.current_path or (self.queue[self.q_idx] if self.queue and self.q_idx >= 0 else None)
+            if cur:
+                cur_info = LIB.tracks.get(cur, {})
+                album = cur_info.get("al")
+                if album:
+                    paths = [p for p, info in LIB.tracks.items() if info.get("al") == album]
+                    title = f"Same Album: {album}"
+                else:
+                    self.status = "Current track has no album tag"
+                    return
+            else:
+                self.status = "Play a track first"
+                return
+
+        if paths:
+            self.set_queue(paths, 0)
+            self.status = title
+        else:
+            self.status = "Smart playlist is empty"
 
     def go_up(self):
         """Backspace in Folders: go up one level."""
@@ -1244,6 +1724,11 @@ class App:
         elif key == "eq":
             self.eq = v
             self.apply_eq()
+        elif key == "lyrics_display":
+            # If lyrics popup is open, reload with new language
+            if self.lyrics_path:
+                self.lyrics_data = read_lrc(self.lyrics_path)
+                self.lyrics_scroll = 0
         self.persist()
 
     # ---------- search ----------
@@ -1287,6 +1772,8 @@ class App:
                 rows = self.rows()
                 if rows:
                     self.activate(rows[min(self.idx, len(rows) - 1)])
+                    # Hide search bar after playing
+                    self.close_search()
             return True
         if code == curses.KEY_DOWN:
             if self.focus == "input":
@@ -1480,17 +1967,106 @@ class App:
         self.q_idx = min(self.q_idx, len(self.queue) - 1)
         self.start_track(self.queue[self.q_idx])
 
+    def fetch_lyrics_online(self, path, lang_filter=None):
+        """Download ALL available languages from LRCLIB and save combined .lrc."""
+        try:
+            info = LIB.tracks.get(path, {})
+            title = info.get("t") or track_title(path)
+            artist = info.get("a") or ""
+            params = {"track_name": title}
+            if artist:
+                params["artist_name"] = artist
+            url = "https://lrclib.net/api/search?" + urllib.parse.urlencode(params)
+            req = urllib.request.Request(url, headers={"User-Agent": "music-am/1.0"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            if not data:
+                self.status = "No lyrics found on LRCLIB"
+                return False
+
+            # Collect ALL languages available
+            # Each result has: syncedLyrics (some lang)
+            # We categorize by detecting language
+            by_lang = {}  # {lang: [(time, text), ...]}
+            detected_counts = {}
+
+            for item in data:
+                sl = item.get("syncedLyrics")
+                if not sl:
+                    continue
+                # Parse this result
+                parsed = []
+                pat = re.compile(r"\[(\d+):(\d+(?:\.\d+)?)\](.*)")
+                for line in sl.split("\n"):
+                    m = pat.match(line)
+                    if not m:
+                        continue
+                    mm, ss, text = m.groups()
+                    t = int(mm) * 60 + float(ss)
+                    text = text.strip()
+                    if text:
+                        parsed.append((t, text))
+                if not parsed:
+                    continue
+                # Detect language of this whole block
+                whole_text = " ".join(t for _, t in parsed)
+                det = detect_language_type(whole_text)
+                detected_counts[det] = detected_counts.get(det, 0) + 1
+                # Store only if not already have this lang
+                if det not in by_lang:
+                    by_lang[det] = parsed
+
+            if not by_lang:
+                self.status = "No playable lyrics found"
+                return False
+
+            # Merge all languages into one time-sorted list
+            merged = []  # (time, lang, text)
+            for lang, lines in by_lang.items():
+                for t, text in lines:
+                    merged.append((t, lang, text))
+
+            # Sort by time, then by language priority (hi, ur, rom, en)
+            priority = {"hi": 0, "ur": 1, "rom": 2, "en": 3}
+            merged.sort(key=lambda x: (x[0], priority.get(x[1], 99)))
+
+            # Write multi-lang .lrc
+            lrc_path = os.path.splitext(path)[0] + ".lrc"
+            with open(lrc_path, "w", encoding="utf-8") as f:
+                for t, lang, text in merged:
+                    mm = int(t // 60)
+                    ss = t - mm * 60
+                    f.write(f"[{mm:02d}:{ss:05.2f}]{{{lang}}}{text}\n")
+
+            # Count languages
+            lang_names = [f"{l}({len(p)})" for l, p in by_lang.items()]
+            lang_summary = ", ".join(lang_names)
+
+            # Load
+            self.lyrics_path = path
+            self.lyrics_data = read_lrc(path)
+            self.lyrics_scroll = 0
+            self.status = f"Downloaded: {lang_summary} · showing {SET.get('lyrics_display', 'all')}"
+            return True
+        except Exception as e:
+            self.status = f"Lyrics fetch failed: {str(e)[:40]}"
+            return False
+
     def open_lyrics(self):
         if not self.current_path:
             self.status = "No track is currently playing"
             return
         data = read_lrc(self.current_path)
         if not data:
-            self.status = "Lyrics (.lrc) not found"
+            # No lyrics — fetch all languages (no prompt)
+            self.fetch_lyrics_online(self.current_path)
             return
         self.lyrics_path = self.current_path
         self.lyrics_data = data
         self.lyrics_scroll = 0
+        display = SET.get("lyrics_display", "all")
+        self.status = f"Lyrics ({display}) · ↑↓ scroll · Enter/Esc close"
 
     def open_now_playing(self):
         if not self.current_path:
@@ -1618,7 +2194,7 @@ class App:
         top, bot = 4, h - 5
         for y in range(top, bot):
             safe(self.scr, y, 0, " " * (w - 1))
-        safe(self.scr, top, 2, "Track info   (any key = close)",
+        safe(self.scr, top, 2, "Track info   (Esc/BKSP = close)",
              curses.color_pair(2) | curses.A_BOLD)
         y = top + 2
         vw = max(10, w - 22)
@@ -1660,43 +2236,84 @@ class App:
             y += 1
 
     def draw_now_playing(self, h, w):
-        for y in range(4, h - 5):
+        """Full-screen now playing with big bar visualizer + album art."""
+        for y in range(0, h):
             safe(self.scr, y, 0, " " * (w - 1))
         if not self.current_path:
-            safe(self.scr, 6, 4, "Nothing playing", curses.color_pair(6))
+            safe(self.scr, h // 2, 4, "Nothing playing", curses.color_pair(6))
             return
+
+        art_lines = None
+        art_x = 0
         title = track_title(self.current_path)
         info = LIB.tracks.get(self.current_path, {})
         artist = info.get("a") or ""
         album = info.get("al") or ""
-        safe(self.scr, 5, 2, "╭" + "─" * (w - 6) + "╮", curses.color_pair(2))
-        y = 6
-        for ln in textwrap.wrap(title, w - 8)[:2]:
-            safe(self.scr, y, 4, f"   {ln}", curses.color_pair(5) | curses.A_BOLD)
+
+        # Top border
+        safe(self.scr, 1, 2, "+" + "-" * (w - 6) + "+", curses.color_pair(2))
+
+        # Title (big, centered, up to 3 lines) — narrower if art shown
+        y = 3
+        title_width = (art_x - 6) if art_lines else (w - 8)
+        title_width = max(10, title_width)
+        lines = textwrap.wrap(title, title_width)[:3]
+        for ln in lines:
+            x = max(2, (w - len(ln)) // 2)
+            safe(self.scr, y, x, ln, curses.color_pair(5) | curses.A_BOLD)
             y += 1
-        y += 1
+
+        # Artist / album
         if artist:
-            safe(self.scr, y, 4, f"    {artist}", curses.color_pair(11))
-            y += 1
+            x = max(2, (w - len(artist) - 4) // 2)
+            safe(self.scr, y + 1, x, "by " + artist, curses.color_pair(11))
+            y += 2
         if album:
-            safe(self.scr, y, 4, f"    {album}", curses.color_pair(6))
+            x = max(2, (w - len(album) - 4) // 2)
+            safe(self.scr, y, x, album, curses.color_pair(6))
             y += 1
-        y += 1
+
+        # Big bar visualizer (centered)
+        y += 2
+        if y < h - 8:
+            big_bars = min(24, w - 10)
+            blocks = "  ▁▂▃▄▅▆▇█"
+            blocks = " " + "▁▂▃▄▅▆▇█"
+            bar_x = max(2, (w - big_bars) // 2)
+            for i in range(big_bars):
+                # Use time + position + sin waves for each bar
+                pos = self.gp("time_pos", 0) or 0
+                vol = max(1, self.user_vol) / VOL_MAX
+                ph = time.monotonic() * 3.5 + i * 0.55 + pos * 0.3
+                v1 = 0.5 + 0.5 * math.sin(ph)
+                v2 = 0.5 + 0.5 * math.sin(ph * 1.6 + i * 0.3)
+                v3 = 0.5 + 0.5 * math.sin(ph * 0.7 + 2.1)
+                hgt = vol * ((v1 + v2 + v3) / 3) * 0.95
+                idx = max(0, min(len(blocks) - 1, int(round(hgt * (len(blocks) - 1)))))
+                ch = blocks[idx]
+                cp = 5 if hgt > 0.65 else (7 if hgt > 0.35 else 4)
+                safe(self.scr, y, bar_x + i, ch, curses.color_pair(cp) | curses.A_BOLD)
+            y += 3
+
+        # Progress bar (centered, wide)
         pos = self.gp("time_pos", 0) or 0
         dur = self.gp("duration", 0) or 0
         if dur > 0:
-            bar_w = max(10, w - 24)
-            filled = min(bar_w, int(bar_w * pos / dur))
+            bar_w = min(w - 20, 60)
+            filled = int(bar_w * pos / dur)
             pct = int(100 * pos / dur)
-            x = 4
-            safe(self.scr, y, x, fmt_time(pos) + " ", curses.color_pair(11))
-            x += len(fmt_time(pos)) + 1
+            bar_x = max(2, (w - bar_w - 14) // 2)
+            safe(self.scr, y, bar_x, fmt_time(pos) + " ", curses.color_pair(11))
+            x = bar_x + len(fmt_time(pos)) + 1
             safe(self.scr, y, x, "█" * filled, curses.color_pair(7) | curses.A_BOLD)
             x += filled
             safe(self.scr, y, x, "░" * (bar_w - filled), curses.color_pair(8))
             x += bar_w - filled
-            safe(self.scr, y, x, f" {fmt_time(dur)} {pct:3d}%", curses.color_pair(11))
-            y += 2
+            safe(self.scr, y, x, f" {fmt_time(dur)}", curses.color_pair(11))
+            y += 1
+
+        # Chips row (centered)
+        y += 1
         chips = []
         if self.queue:
             chips.append(f"[{self.q_idx + 1}/{len(self.queue)}]")
@@ -1705,10 +2322,18 @@ class App:
         if self.repeat != "off":
             chips.append(f"REP:{self.repeat}")
         chips.append(f"EQ:{self.eq}")
-        safe(self.scr, y, 4, "  ".join(chips), curses.color_pair(2))
-        y += 2
-        safe(self.scr, y, 4, "Press any key to close", curses.color_pair(6))
-        safe(self.scr, min(h - 6, y + 2), 2, "╰" + "─" * (w - 6) + "╯", curses.color_pair(2))
+        chip_text = "  ".join(chips)
+        chip_x = max(2, (w - len(chip_text)) // 2)
+        safe(self.scr, y, chip_x, chip_text, curses.color_pair(2))
+
+        # Hint (bottom)
+        hint = "Press Esc or BKSP to close"
+        x = max(2, (w - len(hint)) // 2)
+        safe(self.scr, h - 3, x, hint, curses.color_pair(6))
+
+        # Bottom border
+        safe(self.scr, h - 2, 2, "+" + "-" * (w - 6) + "+", curses.color_pair(2))
+
 
     def draw_eq_menu(self, h, w):
         for y in range(4, h - 5):
@@ -1981,6 +2606,14 @@ class App:
                 self.toggle_favorite(cur[2])
             elif self.current_path:
                 self.toggle_favorite(self.current_path)
+        elif ch == "y":
+            # Random song
+            if LIB.all_paths:
+                rnd = random.choice(LIB.all_paths)
+                self.set_queue([rnd], 0)
+                self.status = f"Random: {os.path.basename(rnd)[:40]}"
+            else:
+                self.status = "Library is empty"
         elif ch == "R":
             if LIB.scanning:
                 self.status = "A scan is already in progress"
@@ -1993,6 +2626,25 @@ class App:
             self.save_playlist()
         elif ch == K["bookmarks"]:
             self.do_bookmarks()
+        elif ch == "K":
+            # Move current queue item up
+            if self.tab == 1 and self.lib_view == 5 and self.q_idx > 0:
+                self.queue[self.q_idx], self.queue[self.q_idx - 1] = \
+                    self.queue[self.q_idx - 1], self.queue[self.q_idx]
+                self.q_idx -= 1
+                self.idx = self.q_idx
+                self.persist()
+                self.status = f"Moved up to position {self.q_idx + 1}"
+        elif ch == "J":
+            # Move current queue item down
+            if (self.tab == 1 and self.lib_view == 5
+                    and self.q_idx >= 0 and self.q_idx < len(self.queue) - 1):
+                self.queue[self.q_idx], self.queue[self.q_idx + 1] = \
+                    self.queue[self.q_idx + 1], self.queue[self.q_idx]
+                self.q_idx += 1
+                self.idx = self.q_idx
+                self.persist()
+                self.status = f"Moved down to position {self.q_idx + 1}"
         elif ch == "d":
             if self.tab == 1 and self.lib_view == 5:
                 self.remove_from_queue()
@@ -2057,11 +2709,19 @@ class App:
                         self.lyrics_scroll = max(0, self.lyrics_scroll - 1)
                     elif code == curses.KEY_DOWN:
                         self.lyrics_scroll += 1
-                    else:
+                    elif code == curses.KEY_PPAGE:
+                        self.lyrics_scroll = max(0, self.lyrics_scroll - 10)
+                    elif code == curses.KEY_NPAGE:
+                        self.lyrics_scroll += 10
+                    elif code in (10, 13):  # Enter
                         self.lyrics_path = None
+                    elif code == 27 or code in (curses.KEY_BACKSPACE, 127, 8):
+                        self.lyrics_path = None
+                    # Any other key = ignore (no close)
                     continue
                 if self.info_path:
-                    self.info_path = None
+                    if code == 27 or code in (curses.KEY_BACKSPACE, 127, 8):
+                        self.info_path = None
                     continue
                 if not self.handle(code, ch):
                     break
