@@ -34,6 +34,26 @@ A fast, keyboard-driven terminal music player for **Termux** (Android) and Linux
 - **Search filters** — `/artist:`, `/album:`, `/fav`, `/recent`, `/eq:`
 - **Random song** (`y`)
 
+## 📸 Screenshots
+
+### Main Interface — All Songs
+![Main UI](screenshots/main.jpg)
+
+### Folder Navigation
+![Folders](screenshots/folders.jpg)
+
+### Equalizer Menu (16+ presets)
+![EQ Menu](screenshots/eq-menu.jpg)
+
+### Synced Lyrics (Hindi/Urdu/Roman)
+![Lyrics](screenshots/lyrics.jpg)
+
+### Full-Screen Now Playing
+![Now Playing](screenshots/now-playing.jpg)
+
+### Settings
+![Settings](screenshots/settings.jpg)
+
 ### 📊 Statistics
 - Weekly / monthly plays
 - Top 5 artists and tracks
