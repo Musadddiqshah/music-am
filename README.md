@@ -34,25 +34,39 @@ A fast, keyboard-driven terminal music player for **Termux** (Android) and Linux
 - **Search filters** — `/artist:`, `/album:`, `/fav`, `/recent`, `/eq:`
 - **Random song** (`y`)
 
+
 ## 📸 Screenshots
 
-### Main Interface — All Songs
-![Main UI](screenshots/main.jpg)
+<div align="center">
+
+### 🎵 Main Interface — All Songs
+<img src="screenshots/main.jpg" width="350" alt="Main Interface">
+
+### 📁 Folder Navigation
+<img src="screenshots/folders.jpg" width="350" alt="Folder Navigation">
+
+### 🎛️ Equalizer Menu (16+ Presets)
+<img src="screenshots/eq-menu.jpg" width="350" alt="Equalizer Menu">
+
+### 📝 Synced Lyrics (Hindi/Urdu/Roman)
+<img src="screenshots/lyrics.jpg" width="350" alt="Synced Lyrics">
+
+### 🎨 Full-Screen Now Playing
+<img src="screenshots/now-playing.jpg" width="350" alt="Now Playing">
+
+### ⚙️ Settings
+<img src="screenshots/settings.jpg" width="350" alt="Settings">
+
+### 📱 Android Notification Controls
+<img src="screenshots/notification.jpg" width="350" alt="Notification Controls">
+
+</div>
+
+
 
 ### Folder Navigation
 ![Folders](screenshots/folders.jpg)
 
-### Equalizer Menu (16+ presets)
-![EQ Menu](screenshots/eq-menu.jpg)
-
-### Synced Lyrics (Hindi/Urdu/Roman)
-![Lyrics](screenshots/lyrics.jpg)
-
-### Full-Screen Now Playing
-![Now Playing](screenshots/now-playing.jpg)
-
-### Settings
-![Settings](screenshots/settings.jpg)
 
 ### 📊 Statistics
 - Weekly / monthly plays
